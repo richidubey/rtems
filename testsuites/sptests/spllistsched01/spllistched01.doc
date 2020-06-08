@@ -1,0 +1,18 @@
+#
+#  The license and distribution terms for this file may be
+#  found in the file LICENSE in this distribution or at
+#  http://www.rtems.org/license/LICENSE.
+#
+
+This file describes the directives and concepts tested by this test set.
+
+test set name:  spllistsched01
+
+directives:
+  + rtems_task_wake_after - yield case
+  + rtems_task_set_priority - preempt and no preempt case
+
+concepts:
+
++ The purpose of this test is to exercise paths in the Llist Scheduler.
+  It exercises Initialization, Allocate, Free, Block, Unblock, and Yield.

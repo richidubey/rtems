@@ -169,6 +169,19 @@ extern "C" {
   #endif
 #endif
 
+#ifdef CONFIGURE_SCHEDULER_USER
+  #ifndef CONFIGURE_SCHEDULER_NAME
+    #define CONFIGURE_SCHEDULER_NAME rtems_build_name( 'U', 'L', 'L', ' ' )
+  #endif
+
+  #ifndef CONFIGURE_SCHEDULER_TABLE_ENTRIES
+    #define CONFIGURE_SCHEDULER RTEMS_SCHEDULER_LLIST( dflt )
+
+    #define CONFIGURE_SCHEDULER_TABLE_ENTRIES \
+      RTEMS_SCHEDULER_TABLE_Llist( dflt, CONFIGURE_SCHEDULER_NAME )
+  #endif
+#endif
+
 #ifdef CONFIGURE_SCHEDULER_SIMPLE_SMP
   #ifndef CONFIGURE_SCHEDULER_NAME
     #define CONFIGURE_SCHEDULER_NAME rtems_build_name( 'M', 'P', 'S', ' ' )

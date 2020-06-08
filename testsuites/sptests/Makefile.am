@@ -1728,6 +1728,15 @@ spsimplesched01_CPPFLAGS = $(AM_CPPFLAGS) \
 	$(TEST_FLAGS_spsimplesched01) $(support_includes)
 endif
 
+if TEST_spllistsched01
+sp_tests += spllistsched01
+sp_screens += spllistsched01/spllistsched01.scn
+sp_docs += spllistsched01/spllistsched01.doc
+spllistsched01_SOURCES = spllistsched01/init.c
+spllistsched01_CPPFLAGS = $(AM_CPPFLAGS) \
+	$(TEST_FLAGS_spllistsched01) $(support_includes)
+endif
+
 if TEST_spsimplesched02
 sp_tests += spsimplesched02
 sp_screens += spsimplesched02/spsimplesched02.scn

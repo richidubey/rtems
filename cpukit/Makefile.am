@@ -906,6 +906,7 @@ librtemscpu_a_SOURCES += score/src/schedulersimplechangepriority.c
 librtemscpu_a_SOURCES += score/src/schedulersimpleschedule.c
 librtemscpu_a_SOURCES += score/src/schedulersimpleunblock.c
 librtemscpu_a_SOURCES += score/src/schedulersimpleyield.c
+librtemscpu_a_SOURCES += score/src/schedulerllist.c
 librtemscpu_a_SOURCES += score/src/scheduleredf.c
 librtemscpu_a_SOURCES += score/src/scheduleredfnodeinit.c
 librtemscpu_a_SOURCES += score/src/scheduleredfblock.c
