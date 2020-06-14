@@ -44,19 +44,35 @@ static rtems_task Init(
 )
 {
   rtems_status_code     status;
-  rtems_id              id;
+  rtems_id              id0;
+  rtems_id              id1;
+  rtems_id              id3;
+  rtems_id              id2;
+  rtems_id              idcurr;
   rtems_task_priority 	old;
 
   TEST_BEGIN();
 
-  status = rtems_task_ident( RTEMS_SELF, RTEMS_SEARCH_ALL_NODES, &id );
+  status = rtems_task_ident( RTEMS_SELF, RTEMS_SEARCH_ALL_NODES, &idcurr );
   directive_failed( status, "task ident" );
 
   /* to make sure it is equal to TA2 */
   puts( "Set Init task priority = 2" );
-  status = rtems_task_set_priority( id, 2, &old );
+  status = rtems_task_set_priority( idcurr, 2, &old );
   directive_failed( status, "task priority" );
 
+ puts( "Create TA3 at higher priority task" );
+  status = rtems_task_create(
+    rtems_build_name( 'T', 'A', '3', ' ' ),
+    1,
+    RTEMS_MINIMUM_STACK_SIZE,
+    RTEMS_DEFAULT_MODES,
+    RTEMS_DEFAULT_ATTRIBUTES,
+    &id3
+  );
+  directive_failed( status, "create 3" );
+  
+  
   puts( "Create TA1 at higher priority task" );
   status = rtems_task_create(
     rtems_build_name( 'T', 'A', '1', ' ' ),
@@ -64,12 +80,31 @@ static rtems_task Init(
     RTEMS_MINIMUM_STACK_SIZE,
     RTEMS_DEFAULT_MODES,
     RTEMS_DEFAULT_ATTRIBUTES,
-    &id
+    &id1
   );
   directive_failed( status, "create 1" );
+  
+   puts( "Create TA0 at higher priority task" );
+  status = rtems_task_create(
+    rtems_build_name( 'T', 'A', '0', ' ' ),
+    1,
+    RTEMS_MINIMUM_STACK_SIZE,
+    RTEMS_DEFAULT_MODES,
+    RTEMS_DEFAULT_ATTRIBUTES,
+    &id0
+  );
+  directive_failed( status, "create 0" );
+  
+  
 
-  status = rtems_task_start( id, High_task, 1 );
+  status = rtems_task_start( id3, High_task, 1 );
+  directive_failed( status, "start 3" );
+  
+  status = rtems_task_start( id1, High_task, 1 );
   directive_failed( status, "start 1" );
+  
+  status = rtems_task_start( id0, High_task, 1 );
+  directive_failed( status, "start 0" );
 
   puts( "Create TA2 at equal priority task" );
   status = rtems_task_create(
@@ -78,11 +113,11 @@ static rtems_task Init(
     RTEMS_MINIMUM_STACK_SIZE,
     RTEMS_DEFAULT_MODES,
     RTEMS_DEFAULT_ATTRIBUTES,
-    &id
+    &id2
   );
   directive_failed( status, "create 2" );
 
-  status = rtems_task_start( id, Equal_task, 1 );
+  status = rtems_task_start( id2, Equal_task, 1 );
   directive_failed( status, "start 2" );
 
   puts( "Yield to TA1" );
@@ -98,7 +133,7 @@ static rtems_task Init(
 #define CONFIGURE_APPLICATION_DOES_NOT_NEED_CLOCK_DRIVER
 #define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 
-#define CONFIGURE_MAXIMUM_TASKS           3
+#define CONFIGURE_MAXIMUM_TASKS           5
 #define CONFIGURE_INIT_TASK_PRIORITY      2
 
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
