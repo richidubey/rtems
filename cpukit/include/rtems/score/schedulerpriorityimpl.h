@@ -207,9 +207,9 @@ RTEMS_INLINE_ROUTINE Chain_Node *_Scheduler_priority_Ready_queue_first(
 )
 {
   Priority_Control index = _Priority_bit_map_Get_highest( bit_map );
-  Chain_Node *first = _Chain_Tail( &ready_queues[ index ] );
+  Chain_Node *first = _Chain_Last( &ready_queues[ index ] );
 
- //_Assert( first != _Chain_Tail( &ready_queues[ index ] ) );
+ _Assert( first != _Chain_Tail( &ready_queues[ index ] ) );
 
   return first;
 }
