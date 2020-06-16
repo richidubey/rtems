@@ -85,13 +85,13 @@ rtems_task Init(
   directive_failed( status, "create 1" );
 
   status = rtems_task_create(
-    Task_name[ 2 ], 1, RTEMS_MINIMUM_STACK_SIZE * 2, RTEMS_DEFAULT_MODES,
+    Task_name[ 2 ], 2, RTEMS_MINIMUM_STACK_SIZE * 2, RTEMS_DEFAULT_MODES,
     RTEMS_DEFAULT_ATTRIBUTES, &Task_id[ 2 ]
   );
   directive_failed( status, "create 2" );
 
   status = rtems_task_create(
-    Task_name[ 3 ], 1, RTEMS_MINIMUM_STACK_SIZE * 2, RTEMS_DEFAULT_MODES,
+    Task_name[ 3 ], 3, RTEMS_MINIMUM_STACK_SIZE * 2, RTEMS_DEFAULT_MODES,
     RTEMS_DEFAULT_ATTRIBUTES, &Task_id[ 3 ]
   );
   directive_failed( status, "create 3" );
@@ -107,11 +107,11 @@ rtems_task Init(
   status = rtems_task_start( Task_id[ 3 ], Test_task, 3 );
   directive_failed( status, "start 3" );
 
-  status = rtems_task_set_priority( Task_id[1], 2, &old );
+  status = rtems_task_set_priority( Task_id[1], 1, &old );
   directive_failed( status, "set priority 1" );
   status = rtems_task_set_priority( Task_id[2], 2, &old );
   directive_failed( status, "set priority 2" );
-  status = rtems_task_set_priority( Task_id[3], 2, &old );
+  status = rtems_task_set_priority( Task_id[3], 3, &old );
   directive_failed( status, "set priority 3" );
 
   status = rtems_task_wake_after( RTEMS_YIELD_PROCESSOR );
