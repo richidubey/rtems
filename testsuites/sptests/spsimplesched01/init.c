@@ -38,20 +38,22 @@ rtems_task Test_task(
   directive_failed( status, "task ident" );
 
   task_index = task_number( tid );
-  for ( ; ; ) {
+  //for ( ; ; ) {
     status = rtems_clock_get_tod( &time );
     directive_failed( status, "clock get tod" );
-    if ( time.second >= 35 ) {
-      TEST_END();
-      rtems_test_exit( 0 );
-    }
+    //if ( time.second >= 35 ) {
+
+    //}
     put_name( Task_name[ task_index ], FALSE );
     print_time( " - rtems_clock_get_tod - ", &time, "\n" );
-    status = rtems_task_wake_after(
-      task_index * 5 * rtems_clock_get_ticks_per_second()
-    );
-    directive_failed( status, "wake after" );
-  }
+    
+    TEST_END();
+    rtems_test_exit( 0 );
+    //status = rtems_task_wake_after(
+      //task_index * 5 * rtems_clock_get_ticks_per_second()
+    //);
+    //directive_failed( status, "wake after" );
+  //}
 }
 
 rtems_task Init(

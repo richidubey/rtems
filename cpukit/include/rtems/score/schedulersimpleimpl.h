@@ -129,7 +129,7 @@ RTEMS_INLINE_ROUTINE void _Scheduler_simple_Schedule_body(
 {
   Scheduler_simple_Context *context =
     _Scheduler_simple_Get_context( scheduler );
-  Thread_Control *heir = (Thread_Control *) _Chain_First( &context->Ready );
+  Thread_Control *heir = (Thread_Control *) _Chain_Last( &context->Ready );
 
   ( void ) the_thread;
 
