@@ -57,6 +57,21 @@ static rtems_task Init(
   status = rtems_task_set_priority( id, 2, &old );
   directive_failed( status, "task priority" );
 
+  puts( "Create TA0 at higher priority task" );
+  status = rtems_task_create(
+    rtems_build_name( 'T', 'A', '0', ' ' ),
+    1,
+    RTEMS_MINIMUM_STACK_SIZE,
+    RTEMS_DEFAULT_MODES,
+    RTEMS_DEFAULT_ATTRIBUTES,
+    &id
+  );
+  directive_failed( status, "create 0" );
+
+  status = rtems_task_start( id, High_task, 1 );
+  directive_failed( status, "start 0" );
+  
+  
   puts( "Create TA1 at higher priority task" );
   status = rtems_task_create(
     rtems_build_name( 'T', 'A', '1', ' ' ),
@@ -85,7 +100,7 @@ static rtems_task Init(
   status = rtems_task_start( id, Equal_task, 1 );
   directive_failed( status, "start 2" );
 
-  puts( "Yield to TA1" );
+  puts( "Yield to TA1/TA0" );
   status = rtems_task_wake_after( RTEMS_YIELD_PROCESSOR );
   directive_failed( status, "yield" );
 
@@ -98,7 +113,7 @@ static rtems_task Init(
 #define CONFIGURE_APPLICATION_DOES_NOT_NEED_CLOCK_DRIVER
 #define CONFIGURE_APPLICATION_NEEDS_SIMPLE_CONSOLE_DRIVER
 
-#define CONFIGURE_MAXIMUM_TASKS           3
+#define CONFIGURE_MAXIMUM_TASKS           4
 #define CONFIGURE_INIT_TASK_PRIORITY      2
 
 #define CONFIGURE_INITIAL_EXTENSIONS RTEMS_TEST_INITIAL_EXTENSION
