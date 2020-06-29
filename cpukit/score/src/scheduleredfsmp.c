@@ -68,6 +68,7 @@ void _Scheduler_EDF_SMP_Initialize( const Scheduler_Control *scheduler )
   /* The ready queues are zero initialized and thus empty */
 }
 
+
 void _Scheduler_EDF_SMP_Node_initialize(
   const Scheduler_Control *scheduler,
   Scheduler_Node          *node,
@@ -149,7 +150,7 @@ static inline Scheduler_Node *_Scheduler_EDF_SMP_Get_highest_ready(
 
   self = _Scheduler_EDF_SMP_Get_self( context );
   highest_ready = (Scheduler_EDF_SMP_Node *)
-    _RBTree_Minimum( &self->Ready[ 0 ].Queue );
+    _RBTree_Maximum( &self->Ready[ 0 ].Queue );
   _Assert( highest_ready != NULL );
 
   /*
@@ -170,7 +171,7 @@ static inline Scheduler_Node *_Scheduler_EDF_SMP_Get_highest_ready(
   }
 
   tail = _Chain_Immutable_tail( &self->Affine_queues );
-  next = _Chain_First( &self->Affine_queues );
+  next = _Chain_Last( &self->Affine_queues );
 
   while ( next != tail ) {
     Scheduler_EDF_SMP_Ready_queue *ready_queue;
