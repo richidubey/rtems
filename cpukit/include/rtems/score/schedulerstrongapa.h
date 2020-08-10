@@ -7,16 +7,16 @@
  */
 
 /*	
- * Copyright (c) 2013, 2018 embedded brains GmbH, 2020 Richi Dubey.  
- *  All rights reserved.	
- *	
+ * Copyright (c) 2020 Richi Dubey
+ *  richidubey@gmail.com
+ *
+ * Copyright (c) 2013, 2018 embedded brains GmbH. All rights reserved.
+ *
  *  embedded brains GmbH	
  *  Dornierstr. 4	
  *  82178 Puchheim	
  *  Germany	
  *  <rtems@embedded-brains.de>	
- *
- *  Richi Dubey: richidubey@gmail.com
  *	
  * The license and distribution terms for this file may be	
  * found in the file LICENSE in this distribution or at	
@@ -47,6 +47,61 @@ extern "C" {
  *
  * @{
  */
+
+/**
+ * @brief Scheduler node specialization for Strong APA schedulers.
+ */
+typedef struct {
+ /**
+   * @brief Chain node for Scheduler_strong_APA_Context::allNodes
+   */
+  Chain_Node Node;
+  
+  /**
+   * @brief SMP scheduler node.
+   */
+  Scheduler_SMP_Node Base;
+
+  /**
+   * @brief The associated affinity set of this node.
+   */
+  Processor_mask Affinity;
+} Scheduler_strong_APA_Node;
+
+/**
+ * @brief CPU structure to be used while traversing in the FIFO Queue
+ */
+typedef struct
+{
+  /**
+   * @brief Array of Cpu pointers to be used for the queue operations 
+   */	
+  Per_CPU_Control *Cpu[ RTEMS_ZERO_LENGTH_ARRAY ];
+} Scheduler_strong_APA_Queue;
+
+/**
+ * @brief Caller corresponding to a Cpu in Scheduler_strong_APA_Queue
+ */
+typedef struct
+{
+  /**
+   * @brief Array of caller pointers with each pointer pointing to the
+   * Scheduler_strong_APA_Queue::Cpu at the same index as the pointer 
+   */	
+  Scheduler_Node *caller[ RTEMS_ZERO_LENGTH_ARRAY ];
+} Scheduler_strong_APA_Caller;
+
+/**
+ * @brief  to a Cpu in Scheduler_strong_APA_Queue
+ */
+typedef struct
+{
+  /**
+   * @brief Array of boolean each corresponding to the visited status of 
+   * Scheduler_strong_APA_Queue::Cpu at the same index 
+   */	
+  bool visited[ RTEMS_ZERO_LENGTH_ARRAY ];
+} Scheduler_strong_APA_Visited;
 
  /**
  * @brief Scheduler context for Strong APA scheduler.
@@ -84,61 +139,6 @@ typedef struct {
    */ 
   Scheduler_strong_APA_Caller *caller;
 } Scheduler_strong_APA_Context;
-
-/**
- * @brief Scheduler node specialization for Strong APA schedulers.
- */
-typedef struct {
- /**
-   * @brief Chain node for Scheduler_strong_APA_Context::allNodes
-   */
-  Chain_Node Node;
-  
-  /**
-   * @brief SMP scheduler node.
-   */
-  Scheduler_SMP_Node Base;
-
-  /**
-   * @brief The associated affinity set of this node.
-   */
-  Processor_mask Affinity;
-} Scheduler_strong_APA_Node;
-
-/**
- * @brief CPU structure to be used while traversing in the FIFO Queue
- */
-typedef struct
-{
-  /**
-   * @brief Array of Cpu to be used for the queue operations 
-   */	
-  Per_CPU_Control Cpu[ RTEMS_ZERO_LENGTH_ARRAY ];
-} Scheduler_strong_APA_Queue;
-
-/**
- * @brief Caller corresponding to a Cpu in Scheduler_strong_APA_Queue
- */
-typedef struct
-{
-  /**
-   * @brief Array of caller each corresponding to the
-   * Scheduler_strong_APA_Queue::Cpu at the same index 
-   */	
-  Scheduler_strong_APA_Node *caller[ RTEMS_ZERO_LENGTH_ARRAY ];
-} Scheduler_strong_APA_Caller;
-
-/**
- * @brief  to a Cpu in Scheduler_strong_APA_Queue
- */
-typedef struct
-{
-  /**
-   * @brief Array of boolean each corresponding to the visited status of 
-   * Scheduler_strong_APA_Queue::Cpu at the same index 
-   */	
-  bool *visited[ RTEMS_ZERO_LENGTH_ARRAY ];
-} Scheduler_strong_APA_Visited;
 
 /**
  * @brief Entry points for the Strong APA Scheduler.
