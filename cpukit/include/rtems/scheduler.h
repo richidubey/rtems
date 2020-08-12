@@ -257,9 +257,9 @@
   #define RTEMS_SCHEDULER_STRONG_APA( name, prio_count ) \
     static struct { \
       Scheduler_strong_APA_Context Base; \
-      Scheduler_strong_APA_Queue Cpu[ CONFIGURE_MAXIMUM_PROCESSORS ]; \
-      Scheduler_strong_APA_Caller caller[ CONFIGURE_MAXIMUM_PROCESSORS ]; \
-      Scheduler_strong_APA_Visited visited[ CONFIGURE_MAXIMUM_PROCESSORS ]; \
+      Per_CPU_Control *Cpu[ CONFIGURE_MAXIMUM_PROCESSORS ]; \
+      Scheduler_Node *caller[ CONFIGURE_MAXIMUM_PROCESSORS ]; \
+      bool visited[ CONFIGURE_MAXIMUM_PROCESSORS ]; \
     } SCHEDULER_STRONG_APA_CONTEXT_NAME( name )
 
   #define RTEMS_SCHEDULER_TABLE_STRONG_APA( name, obj_name ) \
