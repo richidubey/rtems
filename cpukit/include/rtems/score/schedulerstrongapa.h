@@ -61,6 +61,12 @@ typedef struct {
    * @brief SMP scheduler node.
    */
   Scheduler_SMP_Node Base;
+  
+  /**
+   * @brief CPU that invokes this node in the backtracking part of
+   * _Scheduler_strong_APA_Get_highest_ready.
+   */
+  Per_CPU_Control  *invoker;
 
   /**
    * @brief The associated affinity set of this node.
@@ -135,10 +141,12 @@ typedef struct {
    
   /**
    * @brief Pointer to structure with array of 
-   * caller corresponding to a CPU
+   * Scheduler_Node caller corresponding to a CPU
    */ 
   Scheduler_strong_APA_Caller *caller;
 } Scheduler_strong_APA_Context;
+
+#define SCHEDULER_STRONG_APA_MAXIMUM_PRIORITY 255
 
 /**
  * @brief Entry points for the Strong APA Scheduler.

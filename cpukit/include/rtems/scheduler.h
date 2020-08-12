@@ -266,9 +266,7 @@
     { \
       &SCHEDULER_STRONG_APA_CONTEXT_NAME( name ).Base.Base.Base, \
       SCHEDULER_STRONG_APA_ENTRY_POINTS, \
-      RTEMS_ARRAY_SIZE( \
-        SCHEDULER_STRONG_APA_CONTEXT_NAME( name ).Ready \
-      ) - 1, \
+      SCHEDULER_STRONG_APA_MAXIMUM_PRIORITY, \
       ( obj_name ) \
       SCHEDULER_CONTROL_IS_NON_PREEMPT_MODE_SUPPORTED( false ) \
     }
