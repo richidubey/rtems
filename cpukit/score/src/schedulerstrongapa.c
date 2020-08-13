@@ -146,7 +146,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
   front = 0;
   rear = -1;  
   
-  visited = self->visited->visited;
+  visited = self->visited->vis;
   queue = self->queue->Cpu;
 
   thread = filter->user;	
@@ -229,7 +229,6 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
         curr_node = &node->Base.Base;
                 //TODO: Put this in a module since it breaks line length
         next_node = _Thread_Scheduler_get_home_node( node->invoker->executing );
-
     
         _Scheduler_SMP_Preempt(
           context,
@@ -290,9 +289,9 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
 
   self = _Scheduler_strong_APA_Get_self( context );
     
-  visited = self->visited->visited;
+  visited = self->visited->vis;
   queue = self->queue->Cpu;
-  caller = self->caller->caller;
+  caller = self->caller->call;
   
   filter_priority = _Scheduler_Node_get_priority( filter_base );
   filter_priority = SCHEDULER_PRIORITY_PURIFY( filter_priority );   
