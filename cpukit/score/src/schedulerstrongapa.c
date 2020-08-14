@@ -6,9 +6,10 @@
  * @brief Strong APA Scheduler Implementation
  */
 
-/*	
+/*  
  * Copyright (c) 2020 Richi Dubey
- *  richidubey@gmail.com
+ *
+ * <richidubey@gmail.com>
  *
  * Copyright (c) 2013, 2018 embedded brains GmbH. All rights reserved.
  *
@@ -136,18 +137,17 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
   Scheduler_Node *next_node;
   const Chain_Node *tail;
   Chain_Node       *next;
-  Per_CPU_Control **queue;   //Array of Cpu that serves as a queue
-  bool            *visited; //Array of bool values each corresponding to a cpu
+  Scheduler_strong_APA_Struct *Struct;
   
   //Denotes front and rear of the queue
   uint32_t	front;
   uint32_t	rear;
   
+  uint32_t	cpu_max;
+  uint32_t	cpu_index;
+  
   front = 0;
   rear = -1;  
-  
-  visited = self->visited->vis;
-  queue = self->queue->Cpu;
 
   thread = filter->user;	
   thread_cpu = _Thread_Get_CPU( thread );
@@ -160,13 +160,19 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
   min_priority_num = SCHEDULER_PRIORITY_PURIFY( min_priority_num );
 
   highest_ready = filter;
+  Struct = self->Struct;
+  cpu_max = _SMP_Get_processor_maximum();
+  
+  for ( cpu_index = 0 ; cpu_index < cpu_max ; ++cpu_index ) { 
+   Struct[ cpu_index ].visited = false;
+  }
   
   rear = rear + 1;
-  queue[ rear ] = thread_cpu;
-  visited[ _Per_CPU_Get_index( thread_cpu ) ]=true;	
+  Struct[ rear ].Cpu = thread_cpu;
+  Struct[ _Per_CPU_Get_index( thread_cpu ) ].visited = true;	
   
    while( front <= rear ) {
-     curr_CPU = queue[ front ]; 
+     curr_CPU = Struct[ front ].Cpu; 
      front = front + 1;
 
      tail = _Chain_Immutable_tail( &self->All_nodes );
@@ -186,11 +192,10 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
            assigned_cpu = _Thread_Get_CPU( node->Base.Base.user );
            index_assigned_cpu =  _Per_CPU_Get_index( assigned_cpu );
          
-           if ( visited[ index_assigned_cpu ] == false ) {
-           
+           if ( Struct[ index_assigned_cpu ].visited == false ) {
             rear = rear + 1;
-            queue[ rear ] = assigned_cpu;
-            visited[ index_assigned_cpu ] = true;
+            Struct[ rear ].Cpu = assigned_cpu;
+            Struct[ index_assigned_cpu ].visited = true;
             // The curr CPU of the queue invoked this node to add its CPU 
             // that it is executing on to the queue. So this node might get
             // preempted because of the invoker curr_CPU and this curr_CPU
@@ -273,11 +278,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
   Scheduler_strong_APA_Node *curr_strong_node; //Current Strong_APA_Node
   Scheduler_strong_APA_Node *filter_node;  
   Scheduler_strong_APA_Context *self;
-  Per_CPU_Control **queue;   //Array of Cpu that serves as a queue
-  bool            *visited; //Array of bool values each corresponding to a cpu.
-  
-  //Node that has a CPU in its affinity set which gets used for backtracking.
-  Scheduler_Node **caller; //Caller node for a CPU. 
+  Scheduler_strong_APA_Struct *Struct; 
   
   //Denotes front and rear of the queue
   uint32_t	front;
@@ -288,10 +289,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
   rear = -1;  
 
   self = _Scheduler_strong_APA_Get_self( context );
-    
-  visited = self->visited->vis;
-  queue = self->queue->Cpu;
-  caller = self->caller->call;
+  Struct = self->Struct;
   
   filter_priority = _Scheduler_Node_get_priority( filter_base );
   filter_priority = SCHEDULER_PRIORITY_PURIFY( filter_priority );   
@@ -311,7 +309,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
   cpu_max = _SMP_Get_processor_maximum();
   
   for ( cpu_index = 0 ; cpu_index < cpu_max ; ++cpu_index ) { 
-    visited[ cpu_index ] = false;
+    Struct[ cpu_index ].visited = false;
     
     //Checks if the thread_CPU is in the affinity set of the node
     if ( _Processor_mask_Is_set( &filter_node->Affinity, cpu_index) ) { 
@@ -319,15 +317,15 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
          
       if ( _Per_CPU_Is_processor_online( cpu ) ) {
         rear = rear + 1;
-        queue[ rear ] = cpu;
-        visited[ cpu_index ] = true;
-        caller[ cpu_index ] = filter_base;
+        Struct[ rear ].Cpu = cpu;
+        Struct[ cpu_index ].visited = true;
+        Struct[ cpu_index ].caller = filter_base;
       }
     }
   }
   
   while( front <= rear ) {
-    curr_CPU = queue[ front ]; 
+    curr_CPU = Struct[ front ].Cpu; 
     front = front + 1;
     
     curr_thread = curr_CPU->executing;
@@ -353,11 +351,11 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
         if ( _Processor_mask_Is_set( &curr_strong_node->Affinity, cpu_index ) ) { 
           //Checks if the thread_CPU is in the affinity set of the node
           Per_CPU_Control *cpu = _Per_CPU_Get_by_index( cpu_index );
-          if ( _Per_CPU_Is_processor_online( cpu ) && visited[ cpu_index ] == false ) {
+          if ( _Per_CPU_Is_processor_online( cpu ) && Struct[ cpu_index ].visited == false ) {
             rear = rear + 1;
-            queue[ rear ] = cpu;
-            visited[ cpu_index ] = true;
-            caller[ cpu_index ] = curr_node;
+            Struct[ rear ].Cpu = cpu;
+            Struct[ cpu_index ].visited = true;
+            Struct[ cpu_index ].caller = curr_node;
           }
         }  
       }
@@ -368,10 +366,10 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
     //Backtrack on the path from
     //_Thread_Get_CPU(ret->user) to ret, shifting along every task
     
-    curr_node = caller[ _Per_CPU_Get_index(cpu_to_preempt) ];
+    curr_node = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
     curr_CPU = _Thread_Get_CPU( curr_node->user );
     
-    curr_node = caller [ _Per_CPU_Get_index( curr_CPU ) ];
+    curr_node = Struct[ _Per_CPU_Get_index( curr_CPU ) ].caller;
     curr_CPU = _Thread_Get_CPU( curr_node->user );
     
     do{     
@@ -385,7 +383,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
       );
         
       curr_CPU = next_CPU;
-      curr_node = caller[ _Per_CPU_Get_index( curr_CPU ) ];
+      curr_node = Struct[ _Per_CPU_Get_index( curr_CPU ) ].caller;
       
       }while( curr_node != filter_base );
       
@@ -396,7 +394,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
       _Scheduler_strong_APA_Allocate_processor
     );
       
-    filter_base = caller[ _Per_CPU_Get_index(cpu_to_preempt) ];
+    filter_base = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
   }
   return ret;
 }

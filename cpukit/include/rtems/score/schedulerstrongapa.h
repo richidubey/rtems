@@ -8,7 +8,8 @@
 
 /*	
  * Copyright (c) 2020 Richi Dubey
- *  richidubey@gmail.com
+ *
+ *  <richidubey@gmail.com>
  *
  * Copyright (c) 2013, 2018 embedded brains GmbH. All rights reserved.
  *
@@ -52,15 +53,15 @@ extern "C" {
  * @brief Scheduler node specialization for Strong APA schedulers.
  */
 typedef struct {
- /**
-   * @brief Chain node for Scheduler_strong_APA_Context::allNodes
-   */
-  Chain_Node Node;
-  
   /**
    * @brief SMP scheduler node.
    */
   Scheduler_SMP_Node Base;
+  
+ /**
+   * @brief Chain node for Scheduler_strong_APA_Context::allNodes
+   */
+  Chain_Node Node;
   
   /**
    * @brief CPU that invokes this node in the backtracking part of
@@ -74,19 +75,9 @@ typedef struct {
   Processor_mask Affinity;
 } Scheduler_strong_APA_Node;
 
-/**
- * @brief CPU structure to be used while traversing in the FIFO Queue
- */
-typedef struct
-{
-  /**
-   * @brief Array of Cpu pointers to be used for the queue operations 
-   */	
-  Per_CPU_Control *Cpu[ RTEMS_ZERO_LENGTH_ARRAY ];
-} Scheduler_strong_APA_Queue;
 
 /**
- * @brief Caller corresponding to a Cpu in Scheduler_strong_APA_Queue
+ * @brief Struct for each index of the different variable size arrays
  */
 typedef struct
 {
@@ -94,20 +85,19 @@ typedef struct
    * @brief Array of caller pointers with each pointer pointing to the
    * Scheduler_strong_APA_Queue::Cpu at the same index as the pointer 
    */	
-  Scheduler_Node *caller[ RTEMS_ZERO_LENGTH_ARRAY ];
-} Scheduler_strong_APA_Caller;
-
-/**
- * @brief  to a Cpu in Scheduler_strong_APA_Queue
- */
-typedef struct
-{
-  /**
+  Scheduler_Node *caller;
+  
+    /**
+   * @brief Array of Cpu pointers to be used for the queue operations 
+   */	
+  Per_CPU_Control *Cpu;
+  
+    /**
    * @brief Array of boolean each corresponding to the visited status of 
    * Scheduler_strong_APA_Queue::Cpu at the same index 
    */	
-  bool visited[ RTEMS_ZERO_LENGTH_ARRAY ];
-} Scheduler_strong_APA_Visited;
+  bool visited;
+} Scheduler_strong_APA_Struct;
 
  /**
  * @brief Scheduler context for Strong APA scheduler.
@@ -127,23 +117,11 @@ typedef struct {
    * the system. Accounts for ready and scheduled nodes.
    */
   Chain_Control All_nodes;
- 
+  
   /**
-   * @brief Queue for this context
+   * @brief Struct with important variables for each cpu
    */
-  Scheduler_strong_APA_Queue *queue;
-   
-  /**
-   * @brief Pointer to structure with array of
-   * boolean visited values
-   */ 
-  Scheduler_strong_APA_Visited *visited;
-   
-  /**
-   * @brief Pointer to structure with array of 
-   * Scheduler_Node caller corresponding to a CPU
-   */ 
-  Scheduler_strong_APA_Caller *caller;
+  Scheduler_strong_APA_Struct Struct[ RTEMS_ZERO_LENGTH_ARRAY ];
 } Scheduler_strong_APA_Context;
 
 #define SCHEDULER_STRONG_APA_MAXIMUM_PRIORITY 255
