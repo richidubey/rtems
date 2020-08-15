@@ -120,7 +120,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
 ) //TODO
 {
   //return the highest ready Scheduler_Node and Scheduler_Node filter here points
-  // to the victim node that is blocked.
+  // to the victim node that is blocked resulting which this function is called.
   Scheduler_strong_APA_Context *self=_Scheduler_strong_APA_Get_self( context );
 	
   Thread_Control   *thread;
@@ -184,8 +184,12 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
        curr_state = _Scheduler_SMP_Node_state( &node->Base.Base );
     
        if (
-         _Processor_mask_Is_set(&node->Affinity, _Per_CPU_Get_index(curr_CPU) )
+         _Processor_mask_Is_set(&node->Affinity, _Per_CPU_Get_index(curr_CPU) ||
+        //2nd condition is a hack for now. Since if it has no affinity (false case
+        // actually means has all affinity), then it has affinty for this cpu as well. Yay 
+         _Processor_mask_Is_zero( &node->Affinity ) )
        ) {
+       
          //Checks if the curr_CPU is in the affinity set of the node
           
          if ( curr_state == SCHEDULER_SMP_NODE_SCHEDULED ) {
@@ -369,32 +373,38 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
     curr_node = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
     curr_CPU = _Thread_Get_CPU( curr_node->user );
     
-    curr_node = Struct[ _Per_CPU_Get_index( curr_CPU ) ].caller;
-    curr_CPU = _Thread_Get_CPU( curr_node->user );
+    //In case the lowest scheduled is on a processor which is directly
+    // reachable, there has to be no task shifting.
+    if( curr_node != filter_base) {	 
     
-    do{     
-      next_CPU = _Thread_Get_CPU( curr_node->user );
-         
-      _Scheduler_SMP_Preempt(
-        context,
-        curr_node,
-        _Thread_Scheduler_get_home_node( curr_CPU->executing ),
-        _Scheduler_strong_APA_Allocate_processor
-      );
-        
-      curr_CPU = next_CPU;
       curr_node = Struct[ _Per_CPU_Get_index( curr_CPU ) ].caller;
+      curr_CPU = _Thread_Get_CPU( curr_node->user );
+	    
+      do{     
+        next_CPU = _Thread_Get_CPU( curr_node->user );
+	 
+	_Scheduler_SMP_Preempt(
+	  context,
+	  curr_node,
+	  _Thread_Scheduler_get_home_node( curr_CPU->executing ),
+	  _Scheduler_strong_APA_Allocate_processor
+	);
+		
+	curr_CPU = next_CPU;
+	curr_node = Struct[ _Per_CPU_Get_index( curr_CPU ) ].caller;
+	      
+        }while( curr_node != filter_base );
+	      
+        _Scheduler_SMP_Preempt(
+          context,
+          curr_node,
+          _Thread_Scheduler_get_home_node( curr_CPU->executing ),
+          _Scheduler_strong_APA_Allocate_processor
+        );
       
-      }while( curr_node != filter_base );
-      
-    _Scheduler_SMP_Preempt(
-      context,
-      curr_node,
-      _Thread_Scheduler_get_home_node( curr_CPU->executing ),
-      _Scheduler_strong_APA_Allocate_processor
-    );
-      
-    filter_base = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
+        filter_base = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
+      }
+  
   }
   return ret;
 }
@@ -744,9 +754,16 @@ void _Scheduler_strong_APA_Node_initialize(
 )
 {
   Scheduler_SMP_Node *smp_node;
+  Scheduler_strong_APA_Node *strong_node;
   
-  smp_node = _Scheduler_SMP_Node_downcast( node );
+  smp_node = _Scheduler_SMP_Node_downcast( node );  
+  strong_node = _Scheduler_strong_APA_Node_downcast( node );
+  
   _Scheduler_SMP_Node_initialize( scheduler, smp_node, the_thread, priority );
+  _Processor_mask_Assign(
+    &strong_node->Affinity,
+   _SMP_Get_online_processors()
+  );
 }
 
 void _Scheduler_strong_APA_Start_idle(
