@@ -184,10 +184,10 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
        curr_state = _Scheduler_SMP_Node_state( &node->Base.Base );
     
        if (
-         _Processor_mask_Is_set(&node->Affinity, _Per_CPU_Get_index(curr_CPU) ||
+         _Processor_mask_Is_set(&node->Affinity, _Per_CPU_Get_index(curr_CPU)) ||
         //2nd condition is a hack for now. Since if it has no affinity (false case
         // actually means has all affinity), then it has affinty for this cpu as well. Yay 
-         _Processor_mask_Is_zero( &node->Affinity ) )
+         _Processor_mask_Is_zero( &node->Affinity ) 
        ) {
        
          //Checks if the curr_CPU is in the affinity set of the node
@@ -454,9 +454,8 @@ static inline void _Scheduler_strong_APA_Insert_ready(
   self = _Scheduler_strong_APA_Get_self( context );
   node = _Scheduler_strong_APA_Node_downcast( node_base );
   
-  _Assert( !_Chain_Is_node_off_chain( &node->Node ) );
-     
-  _Chain_Append_unprotected( &self->All_nodes, &node->Node );
+  if(_Chain_Is_node_off_chain( &node->Node ) )
+    _Chain_Append_unprotected( &self->All_nodes, &node->Node );
 }
 
 static inline void _Scheduler_strong_APA_Move_from_scheduled_to_ready(
@@ -760,10 +759,18 @@ void _Scheduler_strong_APA_Node_initialize(
   strong_node = _Scheduler_strong_APA_Node_downcast( node );
   
   _Scheduler_SMP_Node_initialize( scheduler, smp_node, the_thread, priority );
+  
   _Processor_mask_Assign(
     &strong_node->Affinity,
    _SMP_Get_online_processors()
   );
+  
+  Scheduler_strong_APA_Context *self;
+
+  self = _Scheduler_strong_APA_Get_self( scheduler->context );
+  
+  if(_Chain_Is_node_off_chain( &strong_node->Node ) )
+    _Chain_Append_unprotected( &self->All_nodes, &strong_node->Node );
 }
 
 void _Scheduler_strong_APA_Start_idle(
