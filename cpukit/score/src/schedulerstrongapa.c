@@ -79,7 +79,7 @@ static inline bool _Scheduler_strong_APA_Has_ready( Scheduler_Context *context )
   ret = false;
   
   while ( next != tail ) {
-    node = (Scheduler_strong_APA_Node *) next;
+    node = (Scheduler_strong_APA_Node *) RTEMS_CONTAINER_OF( next, Scheduler_strong_APA_Node, Chain );
      
     if ( 
     _Scheduler_SMP_Node_state( &node->Base.Base ) == SCHEDULER_SMP_NODE_READY 
@@ -146,6 +146,10 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
   uint32_t	cpu_max;
   uint32_t	cpu_index;
   
+    //When the first task accessed has nothing to compare its priority against
+    // then it is the task with the highest priority witnessed so far!
+  bool first_task = true;
+  
   front = 0;
   rear = -1;  
 
@@ -155,10 +159,6 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
   //Implement the BFS Algorithm for task departure
   //to get the highest ready task for a particular CPU
   
-  //Initialize the min_priority_num variable
-  min_priority_num = _Scheduler_Node_get_priority( filter );
-  min_priority_num = SCHEDULER_PRIORITY_PURIFY( min_priority_num );
-
   highest_ready = filter;
   Struct = self->Struct;
   cpu_max = _SMP_Get_processor_maximum();
@@ -179,7 +179,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
      next = _Chain_First( &self->All_nodes );
   
      while ( next != tail ) {
-       node = (Scheduler_strong_APA_Node *) next;
+       node = (Scheduler_strong_APA_Node*) RTEMS_CONTAINER_OF( next, Scheduler_strong_APA_Node, Chain );
        curr_node = (Scheduler_Node *) next;
        curr_state = _Scheduler_SMP_Node_state( &node->Base.Base );
     
@@ -209,12 +209,13 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
            } 
          } 
          else if ( curr_state == SCHEDULER_SMP_NODE_READY ) {
-           curr_priority = _Scheduler_Node_get_priority( (Scheduler_Node *) next );
+           curr_priority = _Scheduler_Node_get_priority( &node->Base.Base );
   	   curr_priority = SCHEDULER_PRIORITY_PURIFY( curr_priority );
   	
-           if ( curr_priority < min_priority_num ) {
+           if ( first_task == true || curr_priority < min_priority_num ) {
              min_priority_num = curr_priority;
   	     highest_ready = &node->Base.Base;
+  	     first_task = false;
   	   }
          }
        }
@@ -436,10 +437,10 @@ static inline void _Scheduler_strong_APA_Extract_from_ready(
   node = _Scheduler_strong_APA_Node_downcast( node_to_extract );
  
   _Assert( !_Chain_Is_empty(self->All_nodes) );
-  _Assert( !_Chain_Is_node_off_chain( &node->Node ) );
+  _Assert( !_Chain_Is_node_off_chain( &node->Chain ) );
    
-   _Chain_Extract_unprotected( &node->Node );	//Removed from All_nodes
-   _Chain_Set_off_chain( &node->Node );
+   _Chain_Extract_unprotected( &node->Chain );	//Removed from All_nodes
+   _Chain_Set_off_chain( &node->Chain );
 }
 
 static inline void _Scheduler_strong_APA_Insert_ready(
@@ -454,8 +455,8 @@ static inline void _Scheduler_strong_APA_Insert_ready(
   self = _Scheduler_strong_APA_Get_self( context );
   node = _Scheduler_strong_APA_Node_downcast( node_base );
   
-  if(_Chain_Is_node_off_chain( &node->Node ) )
-    _Chain_Append_unprotected( &self->All_nodes, &node->Node );
+  if(_Chain_Is_node_off_chain( &node->Chain ) )
+    _Chain_Append_unprotected( &self->All_nodes, &node->Chain );
 }
 
 static inline void _Scheduler_strong_APA_Move_from_scheduled_to_ready(
@@ -769,8 +770,8 @@ void _Scheduler_strong_APA_Node_initialize(
 
   self = _Scheduler_strong_APA_Get_self( scheduler->context );
   
-  if(_Chain_Is_node_off_chain( &strong_node->Node ) )
-    _Chain_Append_unprotected( &self->All_nodes, &strong_node->Node );
+  if(_Chain_Is_node_off_chain( &strong_node->Chain ) )
+    _Chain_Append_unprotected( &self->All_nodes, &strong_node->Chain );
 }
 
 void _Scheduler_strong_APA_Start_idle(
