@@ -216,6 +216,8 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
              min_priority_num = curr_priority;
   	     highest_ready = &node->Base.Base;
   	     first_task = false;
+  	     //In case this task is directly reachable from thread_CPU
+  	     node->invoker = curr_CPU; 
   	   }
          }
        }
@@ -276,11 +278,13 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
   Per_CPU_Control *cpu_to_preempt;
   Thread_Control  *curr_thread;
   Scheduler_Node  *curr_node;
+  Scheduler_Node  *next_node;
   Scheduler_Node  *ret;
   Priority_Control max_priority_num;
   Priority_Control curr_priority;
 
   Scheduler_strong_APA_Node *curr_strong_node; //Current Strong_APA_Node
+    Scheduler_strong_APA_Node *next_strong_node; //Next Strong_APA_Node
   Scheduler_strong_APA_Node *filter_node;  
   Scheduler_strong_APA_Context *self;
   Scheduler_strong_APA_Struct *Struct; 
@@ -372,41 +376,38 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
     //_Thread_Get_CPU(ret->user) to ret, shifting along every task
     
     curr_node = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
-    curr_CPU = _Thread_Get_CPU( curr_node->user );
     
     //In case the lowest scheduled is on a processor which is directly
     // reachable, there has to be no task shifting.
-    if( curr_node != filter_base) {	 
+    //And ret gets directly preempted in smpimpl caller function of this function
+    if( curr_node != filter_base) {
+      curr_strong_node = _Scheduler_strong_APA_Node_downcast( curr_node );
+      curr_strong_node->invoker = cpu_to_preempt;
+      
+      do{
+        curr_CPU = _Thread_Get_CPU( curr_node->user );
+        curr_node = Struct[ _Per_CPU_Get_index( curr_CPU ) ].caller;
+        curr_strong_node = _Scheduler_strong_APA_Node_downcast( curr_node );
+        curr_strong_node->invoker =  curr_CPU;
+      }while( curr_node != filter_base );
     
-      curr_node = Struct[ _Per_CPU_Get_index( curr_CPU ) ].caller;
-      curr_CPU = _Thread_Get_CPU( curr_node->user );
-	    
-      do{     
-        next_CPU = _Thread_Get_CPU( curr_node->user );
-	 
-	_Scheduler_SMP_Preempt(
+      while( curr_node != Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller ) {
+        next_node = _Thread_Scheduler_get_home_node( curr_strong_node->invoker->executing);	
+      	//curr_node preempts the next_node;
+      	_Scheduler_SMP_Preempt(
 	  context,
 	  curr_node,
-	  _Thread_Scheduler_get_home_node( curr_CPU->executing ),
+	  next_node,
 	  _Scheduler_strong_APA_Allocate_processor
 	);
-		
-	curr_CPU = next_CPU;
-	curr_node = Struct[ _Per_CPU_Get_index( curr_CPU ) ].caller;
-	      
-        }while( curr_node != filter_base );
-	      
-        _Scheduler_SMP_Preempt(
-          context,
-          curr_node,
-          _Thread_Scheduler_get_home_node( curr_CPU->executing ),
-          _Scheduler_strong_APA_Allocate_processor
-        );
-      
-        filter_base = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
+      	
+      	curr_node = next_node;
+       curr_strong_node = _Scheduler_strong_APA_Node_downcast( curr_node );
       }
-  
-  }
+      
+      filter_base = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
+    }
+  }  
   return ret;
 }
 
@@ -768,10 +769,10 @@ void _Scheduler_strong_APA_Node_initialize(
   
   Scheduler_strong_APA_Context *self;
 
-  self = _Scheduler_strong_APA_Get_self( scheduler->context );
-  
-  if(_Chain_Is_node_off_chain( &strong_node->Chain ) )
-    _Chain_Append_unprotected( &self->All_nodes, &strong_node->Chain );
+/*  self = _Scheduler_strong_APA_Get_self( scheduler->context );*/
+/*  */
+/*  if(_Chain_Is_node_off_chain( &strong_node->Chain ) )*/
+/*    _Chain_Append_unprotected( &self->All_nodes, &strong_node->Chain );*/
 }
 
 void _Scheduler_strong_APA_Start_idle(

@@ -61,7 +61,7 @@ typedef struct {
  /**
    * @brief Chain node for Scheduler_strong_APA_Context::allNodes
    */
-  Chain_Node Node;
+  Chain_Node Chain;
   
   /**
    * @brief CPU that invokes this node in the backtracking part of
