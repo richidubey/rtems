@@ -257,7 +257,7 @@
   #define RTEMS_SCHEDULER_STRONG_APA( name, prio_count ) \
     static struct { \
       Scheduler_strong_APA_Context Base; \
-      Scheduler_strong_APA_Struct Struct[ CONFIGURE_MAXIMUM_PROCESSORS ] \
+      Scheduler_strong_APA_Struct Struct[ CONFIGURE_MAXIMUM_PROCESSORS ]; \
     } SCHEDULER_STRONG_APA_CONTEXT_NAME( name )
 
   #define RTEMS_SCHEDULER_TABLE_STRONG_APA( name, obj_name ) \
