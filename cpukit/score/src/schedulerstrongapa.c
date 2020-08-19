@@ -290,7 +290,7 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
   Scheduler_strong_APA_Struct *Struct; 
   
   //Denotes front and rear of the queue
-  uint32_t	front;
+  uint32_t	front;	
   uint32_t	rear;
   
   front = 0;
@@ -405,7 +405,14 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
        curr_strong_node = _Scheduler_strong_APA_Node_downcast( curr_node );
       }
       
-      filter_base = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
+      _Scheduler_SMP_Preempt(
+	  context,
+	  curr_node,
+	  ret,
+	  _Scheduler_strong_APA_Allocate_processor
+	);      
+      
+      ret = filter_base;
     }
   }  
   return ret;
