@@ -541,6 +541,8 @@ static inline bool _Scheduler_strong_APA_Do_enqueue(
       curr_strong_node = _Scheduler_strong_APA_Node_downcast( curr_node );
     }
     
+    _Scheduler_strong_APA_Move_from_scheduled_to_ready(context, lowest_reachable);
+    
     needs_help = false;
   } else {
     needs_help = true;
