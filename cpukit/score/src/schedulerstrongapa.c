@@ -246,8 +246,20 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
     if( node->invoker != filter_cpu ) {
       // Highest ready is not just directly reachable from the victim cpu
       // So there is need of task shifting 
+      
+      curr_node = &node->Base.Base;
+      next_node = _Thread_Scheduler_get_home_node( node->invoker->heir );
     
-      do {
+      _Scheduler_SMP_Preempt(
+        context,
+        curr_node,
+        _Thread_Scheduler_get_home_node( node->invoker->heir ),
+        _Scheduler_strong_APA_Allocate_processor
+      );
+     
+      node = _Scheduler_strong_APA_Node_downcast( next_node ); 
+    
+      while( node->invoker !=  filter_cpu ){
         curr_node = &node->Base.Base;
         next_node = _Thread_Scheduler_get_home_node( node->invoker->heir );
     
@@ -256,10 +268,10 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
           curr_node,
           _Thread_Scheduler_get_home_node( node->invoker->heir ),
           _Scheduler_strong_APA_Allocate_processor
-        );
+      );
      
-       node = _Scheduler_strong_APA_Node_downcast( next_node );      
-     }while( node->invoker !=  filter_cpu );
+      node = _Scheduler_strong_APA_Node_downcast( next_node );      
+      }
       //To save the last node so that the caller SMP_* function 
       //can do the allocation
     
