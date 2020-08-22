@@ -79,8 +79,8 @@ static inline bool _Scheduler_strong_APA_Has_ready( Scheduler_Context *context )
   ret = false;
   
   while ( next != tail ) {
-    node = (Scheduler_strong_APA_Node *) RTEMS_CONTAINER_OF( next, Scheduler_strong_APA_Node, Chain );
-     
+    node = (Scheduler_strong_APA_Node *) STRONG_SCHEDULER_NODE_OF_CHAIN( next );
+    
     if ( 
     _Scheduler_SMP_Node_state( &node->Base.Base ) == SCHEDULER_SMP_NODE_READY 
     ) {
@@ -114,31 +114,101 @@ static inline void _Scheduler_strong_APA_Allocate_processor(
   );
 }
 
+static inline Scheduler_Node * _Scheduler_strong_APA_Find_highest_ready(
+  Scheduler_strong_APA_Context *self,
+  uint32_t                      front, 
+  uint32_t                      rear
+)
+{
+  Scheduler_Node              *highest_ready;
+  Scheduler_strong_APA_Struct *Struct;
+  const Chain_Node            *tail;
+  Chain_Node                  *next;
+  uint32_t                     index_assigned_cpu;
+  Scheduler_strong_APA_Node   *node;
+  Priority_Control             min_priority_num;
+  Priority_Control             curr_priority;
+  Per_CPU_Control             *assigned_cpu;
+  Scheduler_SMP_Node_state     curr_state;
+  Per_CPU_Control             *curr_CPU;
+  bool                         first_task;
+  
+  Struct = self->Struct;
+   //When the first task accessed has nothing to compare its priority against
+  // So, it is the task with the highest priority witnessed so far!
+  first_task = true;
+    
+  while( front <= rear ) {
+    curr_CPU = Struct[ front ].cpu; 
+    front = front + 1;
+
+    tail = _Chain_Immutable_tail( &self->All_nodes );
+    next = _Chain_First( &self->All_nodes );
+  
+    while ( next != tail ) {
+      node = (Scheduler_strong_APA_Node*) STRONG_SCHEDULER_NODE_OF_CHAIN( next );
+      //Check if the curr_CPU is in the affinity set of the node
+      if (
+        _Processor_mask_Is_set(&node->Affinity, _Per_CPU_Get_index(curr_CPU))
+        ) {       
+          curr_state = _Scheduler_SMP_Node_state( &node->Base.Base );
+          
+          if ( curr_state == SCHEDULER_SMP_NODE_SCHEDULED ) {
+            assigned_cpu = _Thread_Get_CPU( node->Base.Base.user );
+            index_assigned_cpu =  _Per_CPU_Get_index( assigned_cpu );
+        
+            if ( Struct[ index_assigned_cpu ].visited == false ) {
+              rear = rear + 1;
+              Struct[ rear ].cpu = assigned_cpu;
+              Struct[ index_assigned_cpu ].visited = true;
+              // The curr CPU of the queue invoked this node to add its CPU 
+              // that it is executing on to the queue. So this node might get
+              // preempted because of the invoker curr_CPU and this curr_CPU
+              // is the CPU that node should preempt in case this node 
+              // gets preempted.
+              node->invoker = curr_CPU; 
+            }  
+          } 
+          else if ( curr_state == SCHEDULER_SMP_NODE_READY ) {
+            curr_priority = _Scheduler_Node_get_priority( &node->Base.Base );
+            curr_priority = SCHEDULER_PRIORITY_PURIFY( curr_priority );
+  
+            if ( first_task == true || curr_priority < min_priority_num ) {
+              min_priority_num = curr_priority;
+  	      highest_ready = &node->Base.Base;
+  	      first_task = false;
+  	      //In case this task is directly reachable from thread_CPU
+  	      node->invoker = curr_CPU; 
+  	    }
+          }
+        }
+      next = _Chain_Next( next );
+     }
+   }
+   
+   return highest_ready;
+}
+   
 static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
   Scheduler_Context *context,
   Scheduler_Node    *filter
-) //TODO
+)
 {
+	
+  //Implement the BFS Algorithm for task departure
+  //to get the highest ready task for a particular CPU
   //return the highest ready Scheduler_Node and Scheduler_Node filter here points
   // to the victim node that is blocked resulting which this function is called.
-  Scheduler_strong_APA_Context *self=_Scheduler_strong_APA_Get_self( context );
-	
-  Thread_Control   *thread;
-  Per_CPU_Control  *thread_cpu;
-  Per_CPU_Control  *curr_CPU;
+  Scheduler_strong_APA_Context *self;
+  
+  Per_CPU_Control  *filter_cpu;
   Scheduler_strong_APA_Node *node;
-  Per_CPU_Control  *assigned_cpu;
-  uint32_t          index_assigned_cpu;
   Scheduler_Node    *highest_ready;
-  Priority_Control  min_priority_num;
-  Priority_Control  curr_priority;
-  Scheduler_SMP_Node_state curr_state;
   Scheduler_Node *curr_node;
   Scheduler_Node *next_node;
-  const Chain_Node *tail;
-  Chain_Node       *next;
   Scheduler_strong_APA_Struct *Struct;
   
+  self=_Scheduler_strong_APA_Get_self( context );
   //Denotes front and rear of the queue
   uint32_t	front;
   uint32_t	rear;
@@ -146,20 +216,10 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
   uint32_t	cpu_max;
   uint32_t	cpu_index;
   
-    //When the first task accessed has nothing to compare its priority against
-    // then it is the task with the highest priority witnessed so far!
-  bool first_task = true;
-  
   front = 0;
   rear = -1;  
 
-  thread = filter->user;	
-  thread_cpu = _Thread_Get_CPU( thread );
-	
-  //Implement the BFS Algorithm for task departure
-  //to get the highest ready task for a particular CPU
-  
-  highest_ready = filter;
+  filter_cpu = _Thread_Get_CPU( filter->user );
   Struct = self->Struct;
   cpu_max = _SMP_Get_processor_maximum();
   
@@ -168,89 +228,38 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_highest_ready(
   }
   
   rear = rear + 1;
-  Struct[ rear ].Cpu = thread_cpu;
-  Struct[ _Per_CPU_Get_index( thread_cpu ) ].visited = true;	
+  Struct[ rear ].cpu = filter_cpu;
+  Struct[ _Per_CPU_Get_index( filter_cpu ) ].visited = true;	
   
-   while( front <= rear ) {
-     curr_CPU = Struct[ front ].Cpu; 
-     front = front + 1;
-
-     tail = _Chain_Immutable_tail( &self->All_nodes );
-     next = _Chain_First( &self->All_nodes );
+  highest_ready = _Scheduler_strong_APA_Find_highest_ready(
+                    self,
+                    front,
+                    rear
+                  );
   
-     while ( next != tail ) {
-       node = (Scheduler_strong_APA_Node*) RTEMS_CONTAINER_OF( next, Scheduler_strong_APA_Node, Chain );
-       curr_node = (Scheduler_Node *) next;
-       curr_state = _Scheduler_SMP_Node_state( &node->Base.Base );
-    
-       if (
-         _Processor_mask_Is_set(&node->Affinity, _Per_CPU_Get_index(curr_CPU)) ||
-        //2nd condition is a hack for now. Since if it has no affinity (false case
-        // actually means has all affinity), then it has affinty for this cpu as well. Yay 
-         _Processor_mask_Is_zero( &node->Affinity ) 
-       ) {
-       
-         //Checks if the curr_CPU is in the affinity set of the node
-          
-         if ( curr_state == SCHEDULER_SMP_NODE_SCHEDULED ) {
-           assigned_cpu = _Thread_Get_CPU( node->Base.Base.user );
-           index_assigned_cpu =  _Per_CPU_Get_index( assigned_cpu );
-         
-           if ( Struct[ index_assigned_cpu ].visited == false ) {
-            rear = rear + 1;
-            Struct[ rear ].Cpu = assigned_cpu;
-            Struct[ index_assigned_cpu ].visited = true;
-            // The curr CPU of the queue invoked this node to add its CPU 
-            // that it is executing on to the queue. So this node might get
-            // preempted because of the invoker curr_CPU and this curr_CPU
-            // is the CPU that node should preempt in case this node 
-            // gets preempted.
-            node->invoker = curr_CPU; 
-           } 
-         } 
-         else if ( curr_state == SCHEDULER_SMP_NODE_READY ) {
-           curr_priority = _Scheduler_Node_get_priority( &node->Base.Base );
-  	   curr_priority = SCHEDULER_PRIORITY_PURIFY( curr_priority );
-  	
-           if ( first_task == true || curr_priority < min_priority_num ) {
-             min_priority_num = curr_priority;
-  	     highest_ready = &node->Base.Base;
-  	     first_task = false;
-  	     //In case this task is directly reachable from thread_CPU
-  	     node->invoker = curr_CPU; 
-  	   }
-         }
-       }
-       next = _Chain_Next( next );
-     }
-   }
-  
-  if ( highest_ready != filter ) { //Should always be true since highest ready 
-  // node corresponding to an empty cpu must exist: TODO: See how.
-  
+  if ( highest_ready != filter ) {  
     //Backtrack on the path from
-    //thread_cpu to highest_ready, shifting along every task.
+    //filter_cpu to highest_ready, shifting along every task.
     
     node = _Scheduler_strong_APA_Node_downcast( highest_ready );
     
-    if( node->invoker != thread_cpu ) {
+    if( node->invoker != filter_cpu ) {
       // Highest ready is not just directly reachable from the victim cpu
       // So there is need of task shifting 
     
       do {
         curr_node = &node->Base.Base;
-                //TODO: Put this in a module since it breaks line length
-        next_node = _Thread_Scheduler_get_home_node( node->invoker->executing );
+        next_node = _Thread_Scheduler_get_home_node( node->invoker->heir );
     
         _Scheduler_SMP_Preempt(
           context,
           curr_node,
-          _Thread_Scheduler_get_home_node( node->invoker->executing ),
+          _Thread_Scheduler_get_home_node( node->invoker->heir ),
           _Scheduler_strong_APA_Allocate_processor
         );
      
        node = _Scheduler_strong_APA_Node_downcast( next_node );      
-     }while( node->invoker !=  thread_cpu );
+     }while( node->invoker !=  filter_cpu );
       //To save the last node so that the caller SMP_* function 
       //can do the allocation
     
@@ -289,12 +298,12 @@ static inline Scheduler_Node *_Scheduler_strong_APA_Get_lowest_scheduled(
   
   for ( cpu_index = 0 ; cpu_index < cpu_max ; ++cpu_index ) { 
   
-    //Checks if the CPU is in the affinity set of filter_node
+    //Checks if the CPU is in the affinity set of filter_strong_node
     if ( _Processor_mask_Is_set( &filter_strong_node->Affinity, cpu_index) ) {
       Per_CPU_Control *cpu = _Per_CPU_Get_by_index( cpu_index );
          
       if ( _Per_CPU_Is_processor_online( cpu ) ) { 
-        curr_thread = cpu->executing;
+        curr_thread = cpu->heir;
         curr_node = _Thread_Scheduler_get_home_node( curr_thread );
         curr_priority = _Scheduler_Node_get_priority( curr_node );
         curr_priority = SCHEDULER_PRIORITY_PURIFY( curr_priority ); 
@@ -394,77 +403,33 @@ static inline void  _Scheduler_strong_APA_Move_from_ready_to_scheduled(
   //Note: The node still stays in the All_nodes chain
 }
 
-static inline bool _Scheduler_strong_APA_Enqueue(
-  Scheduler_Context *context,
-  Scheduler_Node    *node,
-  Priority_Control   insert_priority
+static inline Scheduler_Node* _Scheduler_strong_APA_Get_lowest_reachable(
+  Scheduler_strong_APA_Context *self,
+  uint32_t                      front, 
+  uint32_t                      rear,
+  Per_CPU_Control             **cpu_to_preempt
 )
 {
-  //Idea: BFS Algorithm for task arrival
-  //Enqueue node either in the scheduled chain or in the ready chain  
-  //node is the newly arrived node and is not scheduled.
-	
-  uint32_t	cpu_max;
-  uint32_t	cpu_index;
-  
-  Per_CPU_Control *curr_CPU;
-  Per_CPU_Control *cpu_to_preempt;
-  Thread_Control  *curr_thread;
-  Scheduler_Node  *curr_node;
-  Scheduler_Node  *next_node;
-  Scheduler_Node  *lowest_reachable;
-  Priority_Control max_priority_num;
-  Priority_Control curr_priority;
-  Priority_Control node_priority;
-  Priority_Control lowest_priority;
-
-  Scheduler_strong_APA_Node *curr_strong_node; //Current Strong_APA_Node
-  Scheduler_strong_APA_Node *filter_node;  
-  Scheduler_strong_APA_Context *self;
+  Scheduler_Node              *lowest_reachable;
+  Priority_Control             max_priority_num;
+  uint32_t	               cpu_max;
+  uint32_t	               cpu_index;
+  Thread_Control              *curr_thread;
+  Per_CPU_Control             *curr_CPU;
+  Priority_Control             curr_priority;
+  Scheduler_Node              *curr_node;
+  Scheduler_strong_APA_Node   *curr_strong_node; //Current Strong_APA_Node     
   Scheduler_strong_APA_Struct *Struct; 
-  bool needs_help;
-  
-  //Denotes front and rear of the queue
-  uint32_t	front;	
-  uint32_t	rear;
-  
-  front = 0;
-  rear = -1;  
-
-  self = _Scheduler_strong_APA_Get_self( context );
-  Struct = self->Struct;
-       
-  filter_node = _Scheduler_strong_APA_Node_downcast( node );
-  
+    
   max_priority_num = 0;//Max (Lowest) priority encountered so far.
-  
-  //This assert makes sure that there always exist an element in the 
-  // Queue when we start the queue traversal. 
-  _Assert( !_Processor_mask_Zero( &filter_node->Affinity ) );
-  
+  Struct = self->Struct;
   cpu_max = _SMP_Get_processor_maximum();
   
-  for ( cpu_index = 0 ; cpu_index < cpu_max ; ++cpu_index ) { 
-    Struct[ cpu_index ].visited = false;
-    
-    //Checks if the thread_CPU is in the affinity set of the node
-    if ( _Processor_mask_Is_set( &filter_node->Affinity, cpu_index) ) { 
-      Per_CPU_Control *cpu = _Per_CPU_Get_by_index( cpu_index );
-         
-      if ( _Per_CPU_Is_processor_online( cpu ) ) {
-        rear = rear + 1;
-        Struct[ rear ].Cpu = cpu;
-        Struct[ cpu_index ].visited = true;
-        Struct[ cpu_index ].caller = node;
-      }
-    }
-  }
-  
   while( front <= rear ) {
-    curr_CPU = Struct[ front ].Cpu; 
+    curr_CPU = Struct[ front ].cpu; 
     front = front + 1;
     
-    curr_thread = curr_CPU->executing;
+    curr_thread = curr_CPU->heir;
     curr_node = _Thread_Scheduler_get_home_node( curr_thread );
   
     curr_priority = _Scheduler_Node_get_priority( curr_node );
@@ -475,7 +440,7 @@ static inline bool _Scheduler_strong_APA_Enqueue(
     if ( curr_priority > max_priority_num ) {
       lowest_reachable = curr_node;
       max_priority_num = curr_priority;
-      cpu_to_preempt = curr_CPU;
+      *cpu_to_preempt = curr_CPU;
     }
     
     if ( !curr_thread->is_idle ) {
@@ -485,7 +450,7 @@ static inline bool _Scheduler_strong_APA_Enqueue(
           Per_CPU_Control *cpu = _Per_CPU_Get_by_index( cpu_index );
           if ( _Per_CPU_Is_processor_online( cpu ) && Struct[ cpu_index ].visited == false ) {
             rear = rear + 1;
-            Struct[ rear ].Cpu = cpu;
+            Struct[ rear ].cpu = cpu;
             Struct[ cpu_index ].visited = true;
             Struct[ cpu_index ].caller = curr_node;
           }
@@ -494,6 +459,30 @@ static inline bool _Scheduler_strong_APA_Enqueue(
     }
   }
   
+  return lowest_reachable;
+}
+  
+static inline bool _Scheduler_strong_APA_Do_enqueue(
+  Scheduler_Context *context,
+  Scheduler_Node    *lowest_reachable,
+  Scheduler_Node    *node,
+  Priority_Control  insert_priority,
+  Per_CPU_Control  *cpu_to_preempt
+)
+{
+  bool                          needs_help;
+  Priority_Control              node_priority;
+  Priority_Control              lowest_priority;
+  Scheduler_strong_APA_Struct  *Struct; 
+  Scheduler_Node               *curr_node;
+  Scheduler_strong_APA_Node    *curr_strong_node; //Current Strong_APA_Node
+  Per_CPU_Control              *curr_CPU;
+  Thread_Control               *next_thread;
+  Scheduler_strong_APA_Context *self;
+  Scheduler_Node               *next_node;
+            
+  self = _Scheduler_strong_APA_Get_self( context );
+  Struct = self->Struct;
   
   node_priority = _Scheduler_Node_get_priority( node );
   node_priority = SCHEDULER_PRIORITY_PURIFY( node_priority ); 
@@ -503,7 +492,8 @@ static inline bool _Scheduler_strong_APA_Enqueue(
   
   if( lowest_priority > node_priority ) {
     //Backtrack on the path from
-    //_Thread_Get_CPU(lowest_reachable->user) to lowest_reachable, shifting along every task
+    //_Thread_Get_CPU(lowest_reachable->user) to lowest_reachable, shifting 
+    //along every task
     
     curr_node = Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller;
     curr_strong_node = _Scheduler_strong_APA_Node_downcast( curr_node );
@@ -519,7 +509,8 @@ static inline bool _Scheduler_strong_APA_Enqueue(
     
     //Stop just before the last preemption
     while( curr_node !=  Struct[ _Per_CPU_Get_index(cpu_to_preempt) ].caller) {
-      next_node = _Thread_Scheduler_get_home_node( curr_strong_node->invoker->executing);	
+      next_thread = curr_strong_node->invoker->heir;
+      next_node = _Thread_Scheduler_get_home_node( next_thread );	
       //curr_node preempts the next_node;
       _Scheduler_SMP_Preempt(
 	context,
@@ -544,15 +535,82 @@ static inline bool _Scheduler_strong_APA_Enqueue(
       _Scheduler_strong_APA_Move_from_scheduled_to_ready,
       _Scheduler_strong_APA_Allocate_processor
     );
-
     
     needs_help = false;
   } else {
-    _Scheduler_strong_APA_Insert_ready(context,node,insert_priority);
     needs_help = true;
   }
   
+  //Add it to All_nodes chain since it is now either scheduled or just ready.
+  _Scheduler_strong_APA_Insert_ready(context,node,insert_priority);
+  
   return needs_help;
+}
+
+static inline bool _Scheduler_strong_APA_Enqueue(
+  Scheduler_Context *context,
+  Scheduler_Node    *node,
+  Priority_Control   insert_priority
+)
+{
+  //Idea: BFS Algorithm for task arrival
+  //Enqueue node either in the scheduled chain or in the ready chain  
+  //node is the newly arrived node and is not scheduled.
+  Scheduler_strong_APA_Context *self;
+  Scheduler_strong_APA_Struct  *Struct; 
+  uint32_t	                cpu_max;
+  uint32_t              	cpu_index;
+  Per_CPU_Control              *cpu_to_preempt;
+  Scheduler_Node               *lowest_reachable;
+  Scheduler_strong_APA_Node    *strong_node;  
+
+  //Denotes front and rear of the queue
+  uint32_t	front;	
+  uint32_t	rear;
+  
+  front = 0;
+  rear = -1;  
+
+  self = _Scheduler_strong_APA_Get_self( context );
+  Struct = self->Struct;
+       
+  strong_node = _Scheduler_strong_APA_Node_downcast( node );
+  cpu_max = _SMP_Get_processor_maximum();
+  
+  for ( cpu_index = 0 ; cpu_index < cpu_max ; ++cpu_index ) { 
+    Struct[ cpu_index ].visited = false;
+    
+    //Checks if the thread_CPU is in the affinity set of the node
+    if ( _Processor_mask_Is_set( &strong_node->Affinity, cpu_index) ) { 
+      Per_CPU_Control *cpu = _Per_CPU_Get_by_index( cpu_index );
+         
+      if ( _Per_CPU_Is_processor_online( cpu ) ) {
+        rear = rear + 1;
+        Struct[ rear ].cpu = cpu;
+        Struct[ cpu_index ].visited = true;
+        Struct[ cpu_index ].caller = node;
+      }
+    }
+  }
+  
+  //This assert makes sure that there always exist an element in the 
+  // Queue when we start the queue traversal. 
+  _Assert( !_Processor_mask_Zero( &strong_node->Affinity ) );
+  
+  lowest_reachable = _Scheduler_strong_APA_Get_lowest_reachable(
+                       self,
+                       front,
+                       rear,
+                       &cpu_to_preempt
+                     );
+  
+  return _Scheduler_strong_APA_Do_enqueue(
+           context,
+           lowest_reachable,
+           node,
+           insert_priority,
+           cpu_to_preempt
+        );
 }
 
 static inline bool _Scheduler_strong_APA_Enqueue_scheduled(
@@ -864,7 +922,7 @@ bool _Scheduler_strong_APA_Set_affinity(
    _Scheduler_strong_APA_Enqueue,
    _Scheduler_strong_APA_Allocate_processor
  );
-
+ 
   return true;
 }
 

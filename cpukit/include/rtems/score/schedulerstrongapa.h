@@ -35,12 +35,19 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#define STRONG_SCHEDULER_NODE_OF_CHAIN( node ) \
+  RTEMS_CONTAINER_OF( next, Scheduler_strong_APA_Node, Chain )
+
 /**
  * @defgroup RTEMSScoreSchedulerStrongAPA Strong APA Scheduler
  *
  * @ingroup RTEMSScoreSchedulerSMP
  *
  * @brief Strong APA Scheduler
+ *
+ * This is an implementation of the Strong APA scheduler defined by
+ * Cerqueira et al. in Linux's Processor Affinity API, Refined: 
+ * Shifting Real-Time Tasks Towards Higher Schedulability.
  *
  * This is an implementation of the Strong APA scheduler defined by
  * Cerqueira et al. in Linux's Processor Affinity API, Refined: 
@@ -59,15 +66,16 @@ typedef struct {
   Scheduler_SMP_Node Base;
   
  /**
-   * @brief Chain node for Scheduler_strong_APA_Context::allNodes
+   * @brief Chain node for Scheduler_strong_APA_Context::All_nodes
    */
   Chain_Node Chain;
   
   /**
-   * @brief CPU that invokes this node in the backtracking part of
-   * _Scheduler_strong_APA_Get_highest_ready.
+   * @brief CPU that this node would preempt in the backtracking part of
+   * _Scheduler_strong_APA_Get_highest_ready and
+   * _Scheduler_strong_APA_Do_Enqueue.
    */
-  Per_CPU_Control  *invoker;
+  Per_CPU_Control *invoker;
 
   /**
    * @brief The associated affinity set of this node.
@@ -77,24 +85,27 @@ typedef struct {
 
 
 /**
- * @brief Struct for each index of the different variable size arrays
+ * @brief Struct for each index of the variable size arrays
  */
 typedef struct
 {
   /**
-   * @brief Array of caller pointers with each pointer pointing to the
-   * Scheduler_strong_APA_Queue::Cpu at the same index as the pointer 
+   * @brief The node that called this CPU, i.e. a node which has
+   * the cpu at the index of Scheduler_strong_APA_Context::Struct in
+   * its affinity set.
    */	
   Scheduler_Node *caller;
   
     /**
-   * @brief Array of Cpu pointers to be used for the queue operations 
+   * @brief Cpu at the index of Scheduler_strong_APA_Context::Struct
+   * in Queue implementation.
    */	
-  Per_CPU_Control *Cpu;
+  Per_CPU_Control *cpu;
   
     /**
-   * @brief Array of boolean each corresponding to the visited status of 
-   * Scheduler_strong_APA_Queue::Cpu at the same index 
+   * @brief Indicates if the CPU at the index of 
+   * Scheduler_strong_APA_Context::Struct is already
+   * added to the Queue or not. 
    */	
   bool visited;
 } Scheduler_strong_APA_Struct;
