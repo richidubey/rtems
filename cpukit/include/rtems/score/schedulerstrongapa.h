@@ -5,8 +5,8 @@
  *
  * @brief Strong APA Scheduler API
  */
- 
-/* SPDX-License-Identifier: BSD-2-Clause  
+
+/* SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (C) 2020 Richi Dubey
  * Copyright (c) 2013, 2018 embedded brains GmbH
@@ -55,14 +55,14 @@ extern "C" {
  * @brief Strong APA Scheduler
  *
  * This is an implementation of the Strong APA scheduler defined by
- * Cerqueira et al. in Linux's Processor Affinity API, Refined: 
+ * Cerqueira et al. in Linux's Processor Affinity API, Refined:
  * Shifting Real-Time Tasks Towards Higher Schedulability.
  *
- * The scheduled and ready nodes are accessed via the 
- * Scheduler_strong_APA_Context::Ready which helps in backtracking when a 
+ * The scheduled and ready nodes are accessed via the
+ * Scheduler_strong_APA_Context::Ready which helps in backtracking when a
  * node which is executing on a CPU gets blocked. New node is allocated to
  * the cpu by checking all the executing nodes in the affinity set of the
- * node and the subsequent nodes executing on the processors in its 
+ * node and the subsequent nodes executing on the processors in its
  * affinity set.
  * @{
  */
@@ -75,12 +75,12 @@ typedef struct {
    * @brief SMP scheduler node.
    */
   Scheduler_SMP_Node Base;
-  
+
  /**
    * @brief Chain node for Scheduler_strong_APA_Context::Ready.
    */
   Chain_Node Ready_node;
-  
+
   /**
    * @brief CPU that this node would preempt in the backtracking part of
    * _Scheduler_strong_APA_Get_highest_ready and
@@ -102,23 +102,23 @@ typedef struct
 {
    /**
    * @brief CPU in a queue.
-   */	
+   */
   Per_CPU_Control *cpu;
-  
+
   /**
    * @brief The node that would preempt this CPU.
-   */	
+   */
   Scheduler_Node *preempting_node;
-  
+
    /**
    * @brief Whether or not this cpu has been added to the queue
    * (visited in BFS).
-   */	
+   */
   bool visited;
-  
+
   /**
-   * @brief The node currently executing on this cpu
-   */	
+   * @brief The node currently executing on this cpu.
+   */
    Scheduler_Node *executing;
 } Scheduler_strong_APA_CPU;
 
@@ -130,13 +130,13 @@ typedef struct {
    * @brief @see Scheduler_SMP_Context.
    */
   Scheduler_SMP_Context Base;
-  
+
   /**
    * @brief Chain of all the ready and scheduled nodes present in
    * the Strong APA scheduler.
    */
   Chain_Control Ready;
-  
+
   /**
    * @brief Struct with important variables for each cpu.
    */
@@ -170,7 +170,7 @@ typedef struct {
     _Scheduler_default_Release_job, \
     _Scheduler_default_Cancel_job, \
     _Scheduler_default_Tick, \
-    _Scheduler_SMP_Start_idle, \
+    _Scheduler_strong_APA_Start_idle, \
     _Scheduler_strong_APA_Set_affinity \
   }
 
@@ -238,7 +238,7 @@ void _Scheduler_strong_APA_Update_priority(
 /**
  * @brief Asks for help.
  *
- * @param  scheduler The scheduler control instance.
+ * @param scheduler The scheduler control instance.
  * @param the_thread The thread that asks for help.
  * @param node The node of @a the_thread.
  *
@@ -314,6 +314,19 @@ void _Scheduler_strong_APA_Yield(
   const Scheduler_Control *scheduler,
   Thread_Control          *the_thread,
   Scheduler_Node          *node
+);
+
+/**
+ * @brief Starts an idle thread.
+ *
+ * @param scheduler The scheduler instance.
+ * @param[in, out] the_thread An idle thread.
+ * @param cpu The cpu for the operation.
+ */
+void _Scheduler_strong_APA_Start_idle(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *idle,
+  struct Per_CPU_Control  *cpu
 );
 
 /**
