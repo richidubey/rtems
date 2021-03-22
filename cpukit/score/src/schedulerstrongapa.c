@@ -76,8 +76,9 @@ static inline void _Scheduler_strong_APA_Do_update(
  * Returns true if the Strong APA scheduler has ready nodes
  * available for scheduling.
  */
-static inline bool
-    _Scheduler_strong_APA_Has_ready( Scheduler_Context *context )
+static inline bool _Scheduler_strong_APA_Has_ready( 
+  Scheduler_Context *context 
+)
 {
   Scheduler_strong_APA_Context *self;
   const Chain_Node             *tail;
@@ -89,7 +90,7 @@ static inline bool
   next = _Chain_First( &self->Ready );
 
   while ( next != tail ) {
-    node = (Scheduler_strong_APA_Node *) STRONG_SCHEDULER_NODE_OF_CHAIN( next );
+    node = (Scheduler_strong_APA_Node *)STRONG_SCHEDULER_NODE_OF_CHAIN( next );
 
     if (
       _Scheduler_SMP_Node_state( &node->Base.Base ) ==
@@ -769,12 +770,10 @@ void _Scheduler_strong_APA_Block(
 {
   Scheduler_Context *context = _Scheduler_Get_context( scheduler );
   
-  /* Needed in case the node is a scheduled node, since _SMP_Block  
-     only extracts from the SMP scheduled chain when the node is
-     scheduled and from the Strong APA Ready_chain when the node 
-     is ready. But the Strong APA Ready_chain stores both ready
-     and scheduled nodes. */
-      
+  // Needed in case the node is scheduled node, since _SMP_Block only extracts 
+  // from the SMP scheduled chain and from the Strong APA Ready_chain
+  // when the node is ready. But the Strong APA Ready_chain stores both
+  // ready and scheduled nodes.
   _Scheduler_strong_APA_Extract_from_ready(context, node);
 
   _Scheduler_SMP_Block(
