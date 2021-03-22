@@ -251,6 +251,10 @@
 #ifdef CONFIGURE_SCHEDULER_STRONG_APA
   #include <rtems/score/schedulerstrongapa.h>
 
+  #ifndef CONFIGURE_MAXIMUM_PROCESSORS
+    #error "CONFIGURE_MAXIMUM_PROCESSORS must be defined to configure the Strong APA scheduler"
+  #endif
+  
   #define SCHEDULER_STRONG_APA_CONTEXT_NAME( name ) \
     SCHEDULER_CONTEXT_NAME( strong_APA_ ## name )
 
