@@ -9,7 +9,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (C) 2020 Richi Dubey
- * Copyright (c) 2013, 2018 embedded brains GmbH
+ * Copyright (c) 2013, 2016 embedded brains GmbH
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
