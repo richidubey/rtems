@@ -161,8 +161,6 @@ static inline Scheduler_Node * _Scheduler_strong_APA_Find_highest_ready(
   Scheduler_strong_APA_CPU    *CPU;
   const Chain_Node            *tail;
   Chain_Node                  *next;
-  uint32_t                     index_assigned_cpu;
-  uint32_t                     index_curr_cpu;
   Scheduler_strong_APA_Node   *node;
   Priority_Control             min_priority_num;
   Priority_Control             curr_priority;
@@ -172,10 +170,10 @@ static inline Scheduler_Node * _Scheduler_strong_APA_Find_highest_ready(
 
   CPU = self->CPU;
    /*
-    * When the first task accessed has nothing to compare its priority against
+    * When the first task accessed has nothing to compare its priority against.
     * So, it is the task with the highest priority witnessed so far.
    */
-  min_priority_num = -1;
+  min_priority_num = UINT64_MAX;
 
   while ( front <= rear ) {
     curr_CPU = CPU[ front++ ].cpu;
@@ -186,19 +184,17 @@ static inline Scheduler_Node * _Scheduler_strong_APA_Find_highest_ready(
     while ( next != tail ) {
       node = (Scheduler_strong_APA_Node*) STRONG_SCHEDULER_NODE_OF_CHAIN( next );
       /* Check if the curr_CPU is in the affinity set of the node. */
-      index_curr_cpu = _Per_CPU_Get_index( curr_CPU );
       if (
-        _Processor_mask_Is_set( &node->Affinity, index_curr_cpu )
+        _Processor_mask_Is_set( &node->Affinity, _Per_CPU_Get_index( curr_CPU ) )
       ) {
         curr_state = _Scheduler_SMP_Node_state( &node->Base.Base );
 
         if ( curr_state == SCHEDULER_SMP_NODE_SCHEDULED ) {
           assigned_cpu = _Thread_Get_CPU( node->Base.Base.user );
-          index_assigned_cpu =  _Per_CPU_Get_index( assigned_cpu );
 
-          if ( CPU[ index_assigned_cpu ].visited == false ) {
+          if ( CPU[ _Per_CPU_Get_index( assigned_cpu ) ].visited == false ) {
             CPU[ ++rear ].cpu = assigned_cpu;
-            CPU[ index_assigned_cpu ].visited = true;
+            CPU[ _Per_CPU_Get_index( assigned_cpu ) ].visited = true;
             /*
              * The curr CPU of the queue invoked this node to add its CPU
              * that it is executing on to the queue. So this node might get
@@ -212,7 +208,10 @@ static inline Scheduler_Node * _Scheduler_strong_APA_Find_highest_ready(
           curr_priority = _Scheduler_Node_get_priority( &node->Base.Base );
           curr_priority = SCHEDULER_PRIORITY_PURIFY( curr_priority );
 
-          if ( min_priority_num == -1 || curr_priority < min_priority_num ) {
+          if ( 
+            min_priority_num == UINT64_MAX ||
+            curr_priority < min_priority_num
+          ) {
             min_priority_num = curr_priority;
             highest_ready = &node->Base.Base;
             /*
