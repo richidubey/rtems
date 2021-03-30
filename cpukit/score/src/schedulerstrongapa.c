@@ -540,8 +540,14 @@ static inline bool _Scheduler_strong_APA_Do_enqueue(
   node_priority = _Scheduler_Node_get_priority( node );
   node_priority = SCHEDULER_PRIORITY_PURIFY( node_priority );
 
-  lowest_priority =  _Scheduler_Node_get_priority( lowest_reachable );
-  lowest_priority = SCHEDULER_PRIORITY_PURIFY( lowest_priority );
+  if( lowest_reachable == NULL ) {
+    //This means the affinity set of the newly arrived node
+    //is empty.
+    lowest_priority = UINT64_MAX;
+  } else {
+    lowest_priority =  _Scheduler_Node_get_priority( lowest_reachable );
+    lowest_priority = SCHEDULER_PRIORITY_PURIFY( lowest_priority );
+  }
 
   if ( lowest_priority > node_priority ) {
     /*
@@ -655,12 +661,6 @@ static inline bool _Scheduler_strong_APA_Enqueue(
       }
     }
   }
-
-  /*
-   * This assert makes sure that there always exist an element in the
-   * Queue when we start the queue traversal.
-   */
-  _Assert( !_Processor_mask_Is_zero( &strong_node->Affinity ) );
 
   lowest_reachable = _Scheduler_strong_APA_Get_lowest_reachable(
                        self,
