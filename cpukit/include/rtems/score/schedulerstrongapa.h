@@ -7,26 +7,29 @@
  *   @ref RTEMSScoreSchedulerStrongAPA.
  */
 
-/*
- * Copyright (c) 2013, 2018 embedded brains GmbH.  All rights reserved.
+/*	
+ * Copyright (c) 2013, 2018 embedded brains GmbH, 2020 Richi Dubey.  
+ *  All rights reserved.	
+ *	
+ *  embedded brains GmbH	
+ *  Dornierstr. 4	
+ *  82178 Puchheim	
+ *  Germany	
+ *  <rtems@embedded-brains.de>	
  *
- *  embedded brains GmbH
- *  Dornierstr. 4
- *  82178 Puchheim
- *  Germany
- *  <rtems@embedded-brains.de>
- *
- * The license and distribution terms for this file may be
- * found in the file LICENSE in this distribution or at
+ *  Richi Dubey: richidubey@gmail.com
+ *	
+ * The license and distribution terms for this file may be	
+ * found in the file LICENSE in this distribution or at	
  * http://www.rtems.org/license/LICENSE.
  */
-
+ 
 #ifndef _RTEMS_SCORE_SCHEDULERSTRONGAPA_H
 #define _RTEMS_SCORE_SCHEDULERSTRONGAPA_H
 
 #include <rtems/score/scheduler.h>
-#include <rtems/score/schedulerpriority.h>
 #include <rtems/score/schedulersmp.h>
+#include <rtems/score/percpu.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,42 +42,104 @@ extern "C" {
  *
  * @brief This group contains the Strong APA Scheduler implementation.
  *
- * This is an implementation of the global fixed priority scheduler (G-FP).  It
- * uses one ready chain per priority to ensure constant time insert operations.
- * The scheduled chain uses linear insert operations and has at most processor
- * count entries.  Since the processor and priority count are constants all
- * scheduler operations complete in a bounded execution time.
- *
- * The the_thread preempt mode will be ignored.
+ * This is an implementation of the Strong APA scheduler defined by
+ * Cerqueira et al. in Linux's Processor Affinity API, Refined: 
+ * Shifting Real-Time Tasks Towards Higher Schedulability.
  *
  * @{
  */
 
-/**
- * @brief Scheduler context specialization for Strong APA
- * schedulers.
+ /**
+ * @brief Scheduler context for Strong APA scheduler.
+ *
+ * Has the structure for scheduler context
+ * and Node defintion for Strong APA scheduler
  */
 typedef struct {
-  Scheduler_SMP_Context    Base;
-  Priority_bit_map_Control Bit_map;
-  Chain_Control            Ready[ RTEMS_ZERO_LENGTH_ARRAY ];
+ /**
+   * @brief SMP Context to refer to SMP implementation
+   * code.  
+   */
+  Scheduler_SMP_Context Base;
+  
+  /**
+   * @brief Chain of all the nodes present in
+   * the system. Accounts for ready and scheduled nodes.
+   */
+  Chain_Control All_nodes;
+ 
+  /**
+   * @brief Queue for this context
+   */
+  Scheduler_strong_APA_Queue *queue;
+   
+  /**
+   * @brief Pointer to structure with array of
+   * boolean visited values
+   */ 
+  Scheduler_strong_APA_Visited *visited;
+   
+  /**
+   * @brief Pointer to structure with array of 
+   * caller corresponding to a CPU
+   */ 
+  Scheduler_strong_APA_Caller *caller;
 } Scheduler_strong_APA_Context;
 
 /**
- * @brief Scheduler node specialization for Strong APA
- * schedulers.
+ * @brief Scheduler node specialization for Strong APA schedulers.
  */
 typedef struct {
+ /**
+   * @brief Chain node for Scheduler_strong_APA_Context::allNodes
+   */
+  Chain_Node Node;
+  
   /**
    * @brief SMP scheduler node.
    */
   Scheduler_SMP_Node Base;
 
   /**
-   * @brief The associated ready queue of this node.
+   * @brief The associated affinity set of this node.
    */
-  Scheduler_priority_Ready_queue Ready_queue;
+  Processor_mask Affinity;
 } Scheduler_strong_APA_Node;
+
+/**
+ * @brief CPU structure to be used while traversing in the FIFO Queue
+ */
+typedef struct
+{
+  /**
+   * @brief Array of Cpu to be used for the queue operations 
+   */	
+  Per_CPU_Control Cpu[ RTEMS_ZERO_LENGTH_ARRAY ];
+} Scheduler_strong_APA_Queue;
+
+/**
+ * @brief Caller corresponding to a Cpu in Scheduler_strong_APA_Queue
+ */
+typedef struct
+{
+  /**
+   * @brief Array of caller each corresponding to the
+   * Scheduler_strong_APA_Queue::Cpu at the same index 
+   */	
+  Scheduler_strong_APA_Node *caller[ RTEMS_ZERO_LENGTH_ARRAY ];
+} Scheduler_strong_APA_Caller;
+
+/**
+ * @brief  to a Cpu in Scheduler_strong_APA_Queue
+ */
+typedef struct
+{
+  /**
+   * @brief Array of boolean each corresponding to the visited status of 
+   * Scheduler_strong_APA_Queue::Cpu at the same index 
+   */	
+  bool *visited[ RTEMS_ZERO_LENGTH_ARRAY ];
+} Scheduler_strong_APA_Visited;
 
 /**
  * @brief Entry points for the Strong APA Scheduler.
@@ -101,16 +166,148 @@ typedef struct {
     _Scheduler_default_Release_job, \
     _Scheduler_default_Cancel_job, \
     _Scheduler_default_Tick, \
-    _Scheduler_SMP_Start_idle \
-    SCHEDULER_OPERATION_DEFAULT_GET_SET_AFFINITY \
+    _Scheduler_strong_APA_Start_idle, \
+    _Scheduler_strong_APA_Set_affinity \
   }
 
 /**
- * @brief Initializes the scheduler.
+ * @brief Initializes the Strong_APA scheduler.
  *
- * @param scheduler The scheduler to initialize.
+ * Sets the chain containing all the nodes to empty 
+ * and initializes the SMP scheduler.
+ *
+ * @param scheduler used to get reference to Strong APA scheduler context 
+ * @retval void
+ * @see _Scheduler_strong_APA_Node_initialize()
+ */  
+void _Scheduler_strong_APA_Initialize( 
+  const Scheduler_Control *scheduler 
+);
+   
+/**
+ * @brief Called when a node yields the processor
+ *
+ * @param scheduler The scheduler control instance.
+ * @param thread Thread corresponding to @node
+ * @param node Node that yield the processor
  */
-void _Scheduler_strong_APA_Initialize( const Scheduler_Control *scheduler );
+void _Scheduler_strong_APA_Yield(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *thread,
+  Scheduler_Node          *node
+);
+
+/**
+ * @brief Blocks a node
+ *
+ * Changes the state of the node and extracts it from the queue
+ * calls _Scheduler_SMP_Block().
+ *
+ * @param context The scheduler control instance.
+ * @param thread Thread correspoding to the @node.
+ * @param node node which is to be blocked
+ */ 
+void _Scheduler_strong_APA_Block(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *thread,
+  Scheduler_Node          *node
+);
+
+/**
+ * @brief Unblocks a node
+ *
+ * Changes the state of the node and calls _Scheduler_SMP_Unblock().
+ *
+ * @param scheduler The scheduler control instance.
+ * @param thread Thread correspoding to the @node.
+ * @param node node which is to be unblocked
+ * @see _Scheduler_strong_APA_Enqueue() 
+ * @see _Scheduler_strong_APA_Do_update()
+ */ 
+void _Scheduler_strong_APA_Unblock(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *thread,
+  Scheduler_Node          *node
+);
+
+/**
+ * @brief Updates the priority of the node
+ *
+ * @param scheduler The scheduler control instance.
+ * @param thread Thread correspoding to the @node.
+ * @param node Node whose priority has to be updated 
+ */ 
+void _Scheduler_strong_APA_Update_priority(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *thread,
+  Scheduler_Node          *node
+);
+
+/**
+ * @brief Calls the SMP Ask_for_help
+ *
+ * @param scheduler The scheduler control instance.
+ * @param thread Thread correspoding to the @node that asks for help.
+ * @param node node associated with @thread
+ */ 
+bool _Scheduler_strong_APA_Ask_for_help(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
+);
+
+/**
+ * @brief To Reconsider the help request
+ *
+ * @param scheduler The scheduler control instance.
+ * @param thread Thread correspoding to the @node.
+ * @param node Node corresponding to @thread which asks for 
+ * reconsideration
+ */ 
+void _Scheduler_strong_APA_Reconsider_help_request(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node
+);
+
+/**
+ * @brief Withdraws a node 
+ *
+ * @param scheduler The scheduler control instance.
+ * @param thread Thread correspoding to the @node.
+ * @param node Node that has to be withdrawn
+ * @param next_state the state that the node goes to
+ */ 
+void _Scheduler_strong_APA_Withdraw_node(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *the_thread,
+  Scheduler_Node          *node,
+  Thread_Scheduler_state   next_state
+);
+
+/**
+ * @brief Adds a processor to the scheduler instance
+ *
+ * and allocates an idle thread to the processor.
+ *
+ * @param scheduler The scheduler control instance.
+ * @param idle Idle thread to be allocated to the processor
+ */ 
+void _Scheduler_strong_APA_Add_processor(
+  const Scheduler_Control *scheduler,
+  Thread_Control          *idle
+);
+
+/**
+ * @brief Removes a processor from the scheduler instance
+ *
+ * @param scheduler The scheduler control instance.
+ * @param cpu processor that is removed
+ */ 
+Thread_Control *_Scheduler_strong_APA_Remove_processor(
+  const Scheduler_Control *scheduler,
+  Per_CPU_Control         *cpu
+);
 
 /**
  * @brief Initializes the node with the given priority.
@@ -128,125 +325,27 @@ void _Scheduler_strong_APA_Node_initialize(
 );
 
 /**
- * @brief Blocks the thread.
+ * @brief Starts an idle thread on a CPU
  *
  * @param scheduler The scheduler control instance.
- * @param[in, out] the_thread The thread to block.
- * @param[in, out] node The node of the thread to block.
- */
-void _Scheduler_strong_APA_Block(
+ * @param idle Idle Thread
+ * @param cpu processor that gets the idle thread
+ */ 
+void _Scheduler_strong_APA_Start_idle(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread,
-  Scheduler_Node          *node
+  Thread_Control          *idle,
+  Per_CPU_Control         *cpu
 );
 
 /**
- * @brief Unblocks the thread.
- *
- * @param scheduler The scheduler control instance.
- * @param[in, out] the_thread The thread to unblock.
- * @param[in, out] node The node of the thread to unblock.
+ * @brief Sets the affinity of the @node_base to @affinity
  */
-void _Scheduler_strong_APA_Unblock(
+bool _Scheduler_strong_APA_Set_affinity(
   const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread,
-  Scheduler_Node          *node
+  Thread_Control          *thread,
+  Scheduler_Node          *node_base,
+  const Processor_mask    *affinity
 );
-
-/**
- * @brief Updates the priority of the node.
- *
- * @param scheduler The scheduler control instance.
- * @param the_thread The thread for the operation.
- * @param[in, out] node The node to update the priority of.
- */
-void _Scheduler_strong_APA_Update_priority(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread,
-  Scheduler_Node          *node
-);
-
-/**
- * @brief Asks for help.
- *
- * @param  scheduler The scheduler control instance.
- * @param the_thread The thread that asks for help.
- * @param node The node of @a the_thread.
- *
- * @retval true The request for help was successful.
- * @retval false The request for help was not successful.
- */
-bool _Scheduler_strong_APA_Ask_for_help(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread,
-  Scheduler_Node          *node
-);
-
-/**
- * @brief Reconsiders help request.
- *
- * @param scheduler The scheduler control instance.
- * @param the_thread The thread to reconsider the help request of.
- * @param[in, out] node The node of @a the_thread
- */
-void _Scheduler_strong_APA_Reconsider_help_request(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread,
-  Scheduler_Node          *node
-);
-
-/**
- * @brief Withdraws the node.
- *
- * @param scheduler The scheduler control instance.
- * @param[in, out] the_thread The thread to change the state to @a next_state.
- * @param[in, out] node The node to withdraw.
- * @param next_state The next state for @a the_thread.
- */
-void _Scheduler_strong_APA_Withdraw_node(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread,
-  Scheduler_Node          *node,
-  Thread_Scheduler_state   next_state
-);
-
-/**
- * @brief Adds the idle thread to a processor.
- *
- * @param scheduler The scheduler control instance.
- * @param[in, out] The idle thread to add to the processor.
- */
-void _Scheduler_strong_APA_Add_processor(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *idle
-);
-
-/**
- * @brief Removes an idle thread from the given cpu.
- *
- * @param scheduler The scheduler instance.
- * @param cpu The cpu control to remove from @a scheduler.
- *
- * @return The idle thread of the processor.
- */
-Thread_Control *_Scheduler_strong_APA_Remove_processor(
-  const Scheduler_Control *scheduler,
-  struct Per_CPU_Control  *cpu
-);
-
-/**
- * @brief Performs a yield operation.
- *
- * @param scheduler The scheduler control instance.
- * @param the_thread The thread to yield.
- * @param[in, out] node The node of @a the_thread.
- */
-void _Scheduler_strong_APA_Yield(
-  const Scheduler_Control *scheduler,
-  Thread_Control          *the_thread,
-  Scheduler_Node          *node
-);
-
 /** @} */
 
 #ifdef __cplusplus
