@@ -1,0 +1,26 @@
+This file describes the directives and concepts tested by this test set.
+
+test set name: smpstrongapa02
+
+directives:
+
+  - _Scheduler_strong_APA_Get_highest_ready()
+  - _Scheduler_strong_APA_Get_lowest_ready()
+  - _Scheduler_strong_APA_Set_affinity()
+  etc
+
+concepts:
+
+  A testsuite that would only execute efficiently 
+  (task finish within the deadline if the task set is schedulable)
+  on the Strong APA scheduler but not on the SMP EDF Scheduler or
+  any other SMP scheduler not supporting the dislodging of tasks 
+  based on affinity as described by Bradenburg et. al in :
+  
+  Cerqueira, Felipe & Gujarati, Arpan & Brandenburg, Bjorn. (2015).
+  Linux's Processor Affinity API, Refined: Shifting Real-Time Tasks 
+  Towards Higher Schedulability. 
+  Proceedings - Real-Time Systems Symposium. 2015. 249-259.
+  10.1109/RTSS.2014.29
+
+ 
